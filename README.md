@@ -1,6 +1,8 @@
-# �� COVID Tetris
+# �� COVID RUSH game
 
-A nostalgic Tetris game themed around the 2020 toilet paper rush during the COVID-19 pandemic. Clear lines to collect toilet paper rolls and see how long you can survive!
+A clearing blocks game themed around the 2020 toilet paper rush during the COVID-19 pandemic. Clear lines to collect toilet paper rolls and see how long you can survive. But will you beat the Covid record? 
+
+*Designed in Figma by a human, coded with the help of Cursor AI for fun.
 
 ## �� Play the Game
 
@@ -14,13 +16,16 @@ Remember the great toilet paper shortage of 2020? This game pays homage to that 
 
 ## ✨ Features
 
-- **Classic Tetris gameplay** with a COVID-19 twist
-- **Beautiful pixel art** toilet paper roll pieces
-- **Level progression** with increasing difficulty
-- **Sound effects** including paper crinkling and tearing sounds
-- **Particle effects** for line clears and level ups
-- **Personal score tracking** with localStorage
-- **Responsive design** that works on desktop and mobile
+- Classic "tetris like" gameplay with a COVID-19 twist
+- Pixel art toilet paper roll pieces
+- Level progression with increasing difficulty
+- Sound effects including paper crinkling and tearing sounds
+- Particle effects for line clears and level ups
+- Personal score tracking with localStorage
+- Web first design
+- Start screen with animated toilet paper pieces
+- Background elements (shelves and cashier) for atmosphere
+- Dynamic "Your top score" that updates with personal best
 
 ## �� Audio
 
@@ -42,12 +47,14 @@ Remember the great toilet paper shortage of 2020? This game pays homage to that 
 - **Space** - Pause/Resume
 - **R** - Restart game
 - **Enter** - Hard drop
+- **Any key - Restart on game over screen
 
 ## 🏆 Scoring
 
 - **1 cleared line** = 10 toilet paper rolls
-- **1 roll** = 5 days supply (more realistic than 2020 hoarding!)
+- **1 roll** = 5 days supply
 - **Personal record tracking** with persistent storage
+- **Time supply** calculated as: 1 roll = 0.2 months (10 rolls = 2 months)
 
 ## 🛠️ Technical Details
 
@@ -61,11 +68,14 @@ Remember the great toilet paper shortage of 2020? This game pays homage to that 
 
 ├── index.html # Main game file
 ├── game.js # Game logic and mechanics
+├── index-old.html # Backup of previous version
 ├── logo.png # Game logo
 ├── sparkle.svg # Sparkle graphics
 ├── color-yellow.svg # Yellow toilet paper piece
 ├── color-blue.svg # Blue toilet paper piece
 ├── color-pink.svg # Pink toilet paper piece
+├── shelvesBackground.svg # Shelves background
+├── cachier.svg # Cashier background
 └── level sound.mp3 # Level up audio
 
 
@@ -94,5 +104,3 @@ Feel free to fork, modify, and improve! This is a fun project for the community.
 Open source - feel free to use and modify!
 
 ---
-
-**Made for fun with Cursor.** ��✨
