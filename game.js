@@ -6,14 +6,25 @@ class COVIDTetris {
         this.nextCtx = this.nextCanvas.getContext('2d');
         
         this.BOARD_WIDTH = 10;
-        this.BOARD_HEIGHT = 20;
-        this.CELL_SIZE = 45; // 10 * 45 = 450 width, 20 * 45 = 900 height
+        this.BOARD_HEIGHT = 17; // Reduced from 20 to 17 rows
+        this.CELL_SIZE = 42; // 42px cells
+        
+        // Set canvas drawing size (internal resolution)
+        this.canvas.width = this.BOARD_WIDTH * this.CELL_SIZE; // 420px
+        this.canvas.height = this.BOARD_HEIGHT * this.CELL_SIZE; // 714px
+        
+        // Set canvas display size (what the user sees)
+        this.canvas.style.width = '420px';
+        this.canvas.style.height = '714px';
+        
+        // Handle responsive scaling
+        this.updateCanvasSize();
         
         this.board = Array(this.BOARD_HEIGHT).fill().map(() => Array(this.BOARD_WIDTH).fill(0));
         this.currentPiece = null;
         this.nextPiece = null;
         this.score = 0;
-        this.highestScore = 600; // Static Covid era record
+        this.highestScore = 600; // Static Covid era record (600 rolls = 10 years supply)
         this.yourHighestScore = localStorage.getItem('covidTetrisYourHighestScore') || 0;
         this.packs = 0;
         this.level = 1;
@@ -152,9 +163,16 @@ class COVIDTetris {
         
         console.log('Initializing game...');
         this.updateDisplay();
+        this.initializeYourTopScore();
         this.setupEventListeners();
         this.updateAnimation();
         this.initAudio();
+        
+        // Add resize listener for responsive canvas
+        window.addEventListener('resize', () => {
+            this.updateCanvasSize();
+        });
+        
         // Don't start game automatically - wait for user to start
     }
     
@@ -170,6 +188,18 @@ class COVIDTetris {
                 // Tab is visible - resume if game was paused due to tab switch
                 // Note: We don't auto-resume to avoid interrupting the user
             }
+        });
+
+        // Window focus detection - pause when switching to other applications
+        window.addEventListener('blur', () => {
+            // Window lost focus - pause the game if it's running
+            if (this.gameRunning && !this.gamePaused) {
+                this.togglePause('window');
+            }
+        });
+
+        window.addEventListener('focus', () => {
+            // Window gained focus - don't auto-resume to avoid interrupting the user
         });
 
         document.addEventListener('keydown', (e) => {
@@ -247,6 +277,10 @@ class COVIDTetris {
                     case '0':
                         this.resetIllustration();
                         break;
+                    case 'l':
+                    case 'L':
+                        this.demoLevel7();
+                        break;
                 }
             }
         });
@@ -261,6 +295,9 @@ class COVIDTetris {
         this.linesToNextLevel = 1; // Level 1 → 2: 1 line (faster!)
         this.totalLinesCleared = 0;
         this.board = Array(this.BOARD_HEIGHT).fill().map(() => Array(this.BOARD_WIDTH).fill(0));
+        
+        // Reset game speed to level 1
+        this.dropInterval = 1000; // Level 1: 1 second (normal speed)
         
         // Always generate fresh pieces when starting
         this.generateNewPiece();
@@ -287,6 +324,8 @@ class COVIDTetris {
             // Show different message based on pause reason
             if (reason === 'tab') {
                 funFactDisplay.textContent = 'Game paused - you switched tabs! Press Space to resume.';
+            } else if (reason === 'window') {
+                funFactDisplay.textContent = 'Game paused - you switched to another window! Press Space to resume.';
             } else {
             funFactDisplay.textContent = this.funFacts[Math.floor(Math.random() * this.funFacts.length)];
             }
@@ -332,7 +371,7 @@ class COVIDTetris {
         this.gamePaused = false;
         this.score = 0;
         this.level = 1;
-        this.linesToNextLevel = 2;
+        this.linesToNextLevel = 1; // Level 1 → 2: 1 line (faster!)
         this.totalLinesCleared = 0;
         this.board = Array(this.BOARD_HEIGHT).fill().map(() => Array(this.BOARD_WIDTH).fill(0));
         this.currentPiece = null;
@@ -341,10 +380,21 @@ class COVIDTetris {
         this.pieceGlowTime = 0;
         this.animatingLines = false;
         this.clearedRows = [];
+        this.completedLineHighlight = [];
+        this.isProcessingLines = false;
+        
+        // Reset game speed to starting level
+        this.dropInterval = 1000; // Level 1: 1 second (normal speed)
         
         // Clear any modals
         document.getElementById('pauseModal').style.display = 'none';
         document.getElementById('gameOverModal').style.display = 'none';
+        
+        // Remove game over key listener if it exists
+        if (this.gameOverKeyListener) {
+            document.removeEventListener('keydown', this.gameOverKeyListener);
+            this.gameOverKeyListener = null;
+        }
         
         // Update display
         this.updateDisplay();
@@ -480,6 +530,13 @@ class COVIDTetris {
     }
     
     clearLines() {
+        // Prevent multiple simultaneous line clearing operations
+        if (this.isProcessingLines) {
+            return;
+        }
+        
+        this.isProcessingLines = true;
+        
         let linesCleared = 0;
         let clearedRows = [];
         
@@ -487,16 +544,30 @@ class COVIDTetris {
         for (let row = this.BOARD_HEIGHT - 1; row >= 0; row--) {
             if (this.board[row].every(cell => cell !== 0)) {
                 clearedRows.push(row);
+                console.log(`Found completed line at row ${row}:`, this.board[row]);
             }
         }
         
+        console.log(`Total lines to clear: ${clearedRows.length}`);
+        
         if (clearedRows.length > 0) {
-            // Remove cleared rows
-            clearedRows.sort((a, b) => b - a);
-            clearedRows.forEach(row => {
-                this.board.splice(row, 1);
-                this.board.unshift(Array(this.BOARD_WIDTH).fill(0));
-            });
+            // Highlight completed lines before clearing
+            this.highlightCompletedLines();
+            // Create new board without cleared lines
+            let newBoard = [];
+            for (let row = 0; row < this.BOARD_HEIGHT; row++) {
+                if (!clearedRows.includes(row)) {
+                    newBoard.push([...this.board[row]]);
+                }
+            }
+            
+            // Add empty rows at the top to maintain board height
+            while (newBoard.length < this.BOARD_HEIGHT) {
+                newBoard.unshift(Array(this.BOARD_WIDTH).fill(0));
+            }
+            
+            // Replace the board
+            this.board = newBoard;
             
             // Update score and level
             this.processLineClearing(clearedRows.length);
@@ -519,10 +590,60 @@ class COVIDTetris {
             
             // Update display
             this.updateDisplay();
+            
         } else {
             // No lines cleared, still need to generate new piece
             this.generateNewPiece();
         }
+        
+        // Clear the processing flag
+        this.isProcessingLines = false;
+    }
+    
+    
+    checkForCompletedLines() {
+        // Don't check if we're already processing lines
+        if (this.isProcessingLines) {
+            return;
+        }
+        
+        // Check if there are any completed lines that need to be cleared
+        let hasCompletedLines = false;
+        
+        for (let row = this.BOARD_HEIGHT - 1; row >= 0; row--) {
+            if (this.board[row].every(cell => cell !== 0)) {
+                hasCompletedLines = true;
+                break;
+            }
+        }
+        
+        // If we found completed lines, clear them
+        if (hasCompletedLines) {
+            this.clearLines();
+        }
+    }
+    
+    
+    highlightCompletedLines() {
+        // Highlight completed lines before clearing them
+        this.completedLineHighlight = [];
+        
+        for (let row = this.BOARD_HEIGHT - 1; row >= 0; row--) {
+            if (this.board[row].every(cell => cell !== 0)) {
+                for (let col = 0; col < this.BOARD_WIDTH; col++) {
+                    this.completedLineHighlight.push({ row, col });
+                }
+            }
+        }
+        
+        // Draw with highlight
+        this.draw();
+        
+        // Remove highlight after animation
+        setTimeout(() => {
+            this.completedLineHighlight = [];
+            this.draw();
+        }, 300);
     }
     
     animateLineClearing(clearedRows) {
@@ -558,14 +679,26 @@ class COVIDTetris {
                     this.linesToNextLevel = 4; // Level 4+: 4 lines each (was 5)
                 }
                 
-                // Increase game speed with each level (decrease drop interval)
+                // Level progression: faster early levels, gradual increase from level 8
                 if (this.level === 2) {
-                    this.dropInterval = 800; // Level 2: 0.8 speed
+                    this.dropInterval = 600; // Level 2: 600ms (40% faster)
                 } else if (this.level === 3) {
-                    this.dropInterval = 700; // Level 3: 0.7 speed
-                } else {
-                    // Level 4+: progressive speed increase by 100ms
-                    this.dropInterval = Math.max(300, 700 - (this.level - 3) * 100);
+                    this.dropInterval = 540; // Level 3: 540ms (10% faster)
+                } else if (this.level === 4) {
+                    this.dropInterval = 486; // Level 4: 486ms (10% faster)
+                } else if (this.level === 5) {
+                    this.dropInterval = 413; // Level 5: 413ms (15% faster)
+                } else if (this.level === 6) {
+                    this.dropInterval = 351; // Level 6: 351ms (15% faster)
+                } else if (this.level === 7) {
+                    this.dropInterval = 298; // Level 7: 298ms (15% faster)
+                } else if (this.level >= 8) {
+                    // Level 8+: Gradual 10% speed increase from level 7 speed
+                    let baseSpeed = 298; // Level 7 speed
+                    for (let i = 8; i <= this.level; i++) {
+                        baseSpeed = Math.floor(baseSpeed * 0.9); // 10% faster each level
+                    }
+                    this.dropInterval = Math.max(50, baseSpeed); // Minimum 50ms
                 }
                 
                 // Trigger level up animation and sound
@@ -626,6 +759,7 @@ class COVIDTetris {
             }, 600);
         }
     }
+    
     
     createParticles(x, y, count = 8) {
         const gameContainer = document.querySelector('.game-board');
@@ -980,33 +1114,46 @@ class COVIDTetris {
         this.createPaperRub();
     }
     
+    updateCanvasSize() {
+        // Handle responsive canvas sizing
+        const containerWidth = window.innerWidth;
+        
+        if (containerWidth <= 768) {
+            // Mobile: use aspect ratio to maintain proportions
+            const maxWidth = Math.min(containerWidth - 20, 420); // Account for padding
+            const height = (maxWidth / 10) * 17; // Maintain 10:17 aspect ratio
+            
+            this.canvas.style.width = maxWidth + 'px';
+            this.canvas.style.height = height + 'px';
+            } else {
+            // Desktop: use fixed size
+            this.canvas.style.width = '420px';
+            this.canvas.style.height = '714px';
+        }
+    }
+
     updateDisplay() {
         // Update current score
-        // Assuming 1 roll lasts about 1 week, so 52 rolls = 1 year
-        const years = Math.floor(this.score / 52);
-        const weeks = this.score % 52;
-        const months = Math.floor(weeks / 4.33); // Average weeks per month
-        const remainingWeeks = Math.floor(weeks % 4.33);
-        const days = Math.floor(remainingWeeks * 7); // Convert weeks to days
+        // 10 rolls = 2 months, so 1 roll = 0.2 months
+        // 60 rolls = 12 months = 1 year
+        const totalMonths = Math.floor(this.score * 0.2);
+        const years = Math.floor(totalMonths / 12);
+        const months = totalMonths % 12;
         
         let timeText = '';
         if (this.score === 0) {
-            timeText = '0 days';
+            timeText = '0 months';
         } else if (years > 0) {
             timeText += `${years} years `;
-            if (months > 0) timeText += `${months} months `;
-            if (remainingWeeks > 0) timeText += `${remainingWeeks} weeks`;
+            if (months > 0) timeText += `${months} months`;
         } else if (months > 0) {
-            timeText += `${months} months `;
-            if (remainingWeeks > 0) timeText += `${remainingWeeks} weeks`;
-        } else if (weeks > 0) {
-            timeText += `${weeks} weeks`;
-            } else {
-            timeText = `${days} days`;
+            timeText += `${months} months`;
+        } else {
+            timeText = '0 months';
         }
         
         document.getElementById('currentScoreNumber').textContent = this.score;
-        document.getElementById('currentTimeSupply').textContent = `${timeText.trim()} supply`;
+        document.getElementById('currentTimeSupply').textContent = `, ${timeText.trim()} supply`;
         document.getElementById('currentLevel').textContent = `Level ${this.level}`;
         
         // Update your highest score
@@ -1015,9 +1162,52 @@ class COVIDTetris {
             localStorage.setItem('covidTetrisYourHighestScore', this.yourHighestScore);
         }
         
-        // Display static highest score (Covid era record)
-        document.getElementById('highestScore').textContent = '600 rolls or 8 years supply';
-        document.getElementById('yourHighestScore').textContent = `${this.yourHighestScore} rolls`;
+        // Display player's highest score in yourTopScore
+        // 10 rolls = 2 months, so 1 roll = 0.2 months
+        // 60 rolls = 12 months = 1 year
+        const highestTotalMonths = Math.floor(this.yourHighestScore * 0.2);
+        const highestYears = Math.floor(highestTotalMonths / 12);
+        const highestMonths = highestTotalMonths % 12;
+        
+        let highestTimeText = '';
+        if (this.yourHighestScore === 0) {
+            highestTimeText = '0 months';
+        } else if (highestYears > 0) {
+            highestTimeText += `${highestYears} years `;
+            if (highestMonths > 0) highestTimeText += `${highestMonths} months`;
+        } else if (highestMonths > 0) {
+            highestTimeText += `${highestMonths} months`;
+        } else {
+            highestTimeText = '0 months';
+        }
+        
+        document.getElementById('yourTopScore').textContent = `${this.yourHighestScore} rolls, ${highestTimeText.trim()} supply`;
+        
+        // Update next piece display
+        this.drawNextPiece();
+    }
+    
+    initializeYourTopScore() {
+        // Initialize the "Your top score" display with the saved highest score
+        // 10 rolls = 2 months, so 1 roll = 0.2 months
+        // 60 rolls = 12 months = 1 year
+        const highestTotalMonths = Math.floor(this.yourHighestScore * 0.2);
+        const highestYears = Math.floor(highestTotalMonths / 12);
+        const highestMonths = highestTotalMonths % 12;
+        
+        let highestTimeText = '';
+        if (this.yourHighestScore === 0) {
+            highestTimeText = '0 months';
+        } else if (highestYears > 0) {
+            highestTimeText += `${highestYears} years `;
+            if (highestMonths > 0) highestTimeText += `${highestMonths} months`;
+        } else if (highestMonths > 0) {
+            highestTimeText += `${highestMonths} months`;
+        } else {
+            highestTimeText = '0 months';
+        }
+        
+        document.getElementById('yourTopScore').textContent = `${this.yourHighestScore} rolls, ${highestTimeText.trim()} supply`;
     }
     
     updateIllustration() {
@@ -1053,7 +1243,7 @@ class COVIDTetris {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
         // Draw grid
-        this.ctx.strokeStyle = '#ff69b4';
+        this.ctx.strokeStyle = '#FDBBFF';
         this.ctx.lineWidth = 1;
         
         for (let x = 0; x <= this.BOARD_WIDTH; x++) {
@@ -1079,11 +1269,20 @@ class COVIDTetris {
                         // Draw with clearing animation effect
                         this.drawToiletPaperRollWithAnimation(col * this.CELL_SIZE, row * this.CELL_SIZE, this.board[row][col], this.CELL_SIZE);
                     } else {
-                    this.drawToiletPaperRoll(col * this.CELL_SIZE, row * this.CELL_SIZE, this.board[row][col], this.CELL_SIZE);
+                        this.drawToiletPaperRoll(col * this.CELL_SIZE, row * this.CELL_SIZE, this.board[row][col], this.CELL_SIZE);
                     }
                 }
             }
         }
+        
+        
+        // Draw completed line highlight
+        if (this.completedLineHighlight && this.completedLineHighlight.length > 0) {
+            this.completedLineHighlight.forEach(pos => {
+                this.drawCompletedLineHighlight(pos.col * this.CELL_SIZE, pos.row * this.CELL_SIZE, this.CELL_SIZE);
+            });
+        }
+        
         
         // Draw glow effect for pieces that just landed (overlay on top)
         if (this.pieceGlowPositions.length > 0) {
@@ -1092,6 +1291,11 @@ class COVIDTetris {
         
         // Draw current piece
         if (this.currentPiece) {
+            // Draw motion trail for fast-moving pieces (level 15+)
+            if (this.level >= 15) {
+                this.drawMotionTrail();
+            }
+            
             for (let row = 0; row < this.currentPiece.shape.length; row++) {
                 for (let col = 0; col < this.currentPiece.shape[row].length; col++) {
                     if (this.currentPiece.shape[row][col]) {
@@ -1102,6 +1306,44 @@ class COVIDTetris {
                 }
             }
         }
+    }
+    
+    drawMotionTrail() {
+        if (!this.currentPiece) return;
+        
+        // Just one trail unit behind the piece
+        const trailY = this.currentPiece.y - 1;
+        
+        // Skip if trail would go above the board
+        if (trailY < 0) return;
+        
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.4; // Subtle opacity for the single trail unit
+        
+        // Draw trail for each block in the piece
+        for (let row = 0; row < this.currentPiece.shape.length; row++) {
+            for (let col = 0; col < this.currentPiece.shape[row].length; col++) {
+                if (this.currentPiece.shape[row][col]) {
+                    const x = (this.currentPiece.x + col) * this.CELL_SIZE;
+                    const y = (trailY + row) * this.CELL_SIZE;
+                    
+                    // Draw a slightly smaller version
+                    const scale = 0.9;
+                    
+                    this.ctx.save();
+                    this.ctx.translate(x + this.CELL_SIZE/2, y + this.CELL_SIZE/2);
+                    this.ctx.scale(scale, scale);
+                    this.ctx.translate(-this.CELL_SIZE/2, -this.CELL_SIZE/2);
+                    
+                    // Draw the trail piece
+                    this.drawToiletPaperRoll(0, 0, this.currentPiece.color, this.CELL_SIZE);
+                    
+                    this.ctx.restore();
+                }
+            }
+        }
+        
+        this.ctx.restore();
     }
     
     drawToiletPaperRoll(x, y, color, size) {
@@ -1127,6 +1369,58 @@ class COVIDTetris {
             
             this.ctx.restore();
         }
+    }
+    
+    drawCompletedLineHighlight(x, y, size) {
+        // Draw a bright white highlight for completed lines
+        this.ctx.save();
+        
+        // Create pulsing effect
+        const pulseTime = Date.now() * 0.008;
+        const pulseIntensity = 0.6 + 0.4 * Math.sin(pulseTime);
+        
+        // Draw bright white highlight
+        this.ctx.fillStyle = `rgba(255, 255, 255, ${0.3 * pulseIntensity})`;
+        this.ctx.fillRect(x, y, size, size);
+        
+        // Draw border
+        this.ctx.strokeStyle = `rgba(255, 255, 255, ${0.9 * pulseIntensity})`;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(x - 1, y - 1, size + 2, size + 2);
+        
+        this.ctx.restore();
+    }
+    
+    drawFallingPiece(fallingPiece) {
+        // Draw a piece that's currently falling due to gravity
+        this.ctx.save();
+        
+        // Calculate current position based on progress
+        const fromX = fallingPiece.fromCol * this.CELL_SIZE;
+        const fromY = fallingPiece.fromRow * this.CELL_SIZE;
+        const toX = fallingPiece.toCol * this.CELL_SIZE;
+        const toY = fallingPiece.toRow * this.CELL_SIZE;
+        
+        // Use easing function for smooth falling
+        const easeProgress = this.easeOutCubic(fallingPiece.progress);
+        
+        const currentX = fromX + (toX - fromX) * easeProgress;
+        const currentY = fromY + (toY - fromY) * easeProgress;
+        
+        // Draw the piece at its current falling position
+        this.drawToiletPaperRoll(currentX, currentY, fallingPiece.piece, this.CELL_SIZE);
+        
+        // Add a subtle shadow/glow effect while falling
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        this.ctx.fillRect(currentX + 2, currentY + 2, this.CELL_SIZE - 4, this.CELL_SIZE - 4);
+        
+        this.ctx.restore();
+    }
+    
+    easeOutCubic(t) {
+        // Smooth easing function for falling animation
+        return 1 - Math.pow(1 - t, 3);
     }
     
     drawPieceGlow() {
@@ -1348,17 +1642,22 @@ class COVIDTetris {
     gameOver() {
         this.gameRunning = false;
         
-        // Calculate years of supply (1 roll = 5 days)
-        const days = Math.floor(this.score * 5);
+        // Calculate years of supply (10 rolls = 2 months)
+        // 60 rolls = 12 months = 1 year
+        const totalMonths = Math.floor(this.score * 0.2);
+        const years = Math.floor(totalMonths / 12);
+        const months = totalMonths % 12;
+        
         let timeText = '';
-        if (days >= 365) {
-            const years = Math.floor(days / 365);
-            timeText = `${years} years`;
-        } else if (days >= 7) {
-            const weeks = Math.floor(days / 7);
-            timeText = `${weeks} weeks`;
+        if (this.score === 0) {
+            timeText = '0 months';
+        } else if (years > 0) {
+            timeText += `${years} years `;
+            if (months > 0) timeText += `${months} months`;
+        } else if (months > 0) {
+            timeText += `${months} months`;
         } else {
-            timeText = `${days} days`;
+            timeText = '0 months';
         }
         
         // Update game over message with conditional fun copy
@@ -1375,6 +1674,16 @@ class COVIDTetris {
         document.getElementById('gameOverMessage').textContent = message;
         
         document.getElementById('gameOverModal').style.display = 'flex';
+        
+        // Add key listener for restart on any key press
+        this.gameOverKeyListener = (e) => {
+            e.preventDefault();
+            this.restartGame();
+            // Remove the listener after restart
+            document.removeEventListener('keydown', this.gameOverKeyListener);
+            this.gameOverKeyListener = null;
+        };
+        document.addEventListener('keydown', this.gameOverKeyListener);
     }
     
     gameLoop(currentTime = 0) {
@@ -1411,6 +1720,28 @@ class COVIDTetris {
         this.totalLinesCleared = 0;
         this.updateIllustration();
     }
+    
+    demoLevel7() {
+        console.log('Demo Level 15 - Motion Trail Effect');
+        // Set level to 15 for trail effect
+        this.level = 15;
+        this.linesToNextLevel = 4;
+        
+        // Set correct Level 15 speed based on new progression
+        // Level 15 speed: 600 * 0.75^7 * 0.73^5 ≈ 42ms
+        this.dropInterval = 42; // Level 15 speed
+        
+        // Update display
+        this.updateDisplay();
+        
+        // Generate a piece to see the trail effect
+        if (!this.currentPiece) {
+            this.generateNewPiece();
+        }
+        
+        console.log('Level 15 demo active! Pieces will now show motion trails. Press Shift+0 to reset.');
+    }
+    
     
 }
 
