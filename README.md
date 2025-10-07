@@ -4,7 +4,7 @@ A nostalgic Tetris game themed around the 2020 toilet paper rush during the COVI
 
 ## 🎮 Play the Game
 
-[Play Now](https://sashapronina.github.io/covid-tetris)
+[Play Now](https://sashapronina.github.io/covid-rush)
 
 ## 🎯 About
 
