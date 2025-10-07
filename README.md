@@ -1,6 +1,6 @@
 # COVID Tetris 🧻
 
-A nostalgic Tetris game themed around the 2020 toilet paper rush during the COVID-19 pandemic. Clear lines to collect toilet paper rolls and see how long you can survive. But can you beat the Covid record, of 600 rolls?
+A nostalgic Tetris game themed around the 2020 toilet paper rush during the COVID-19 pandemic. Clear lines to collect toilet paper rolls and see how long you can survive. Can you beat the Covid record of collecting 600 rolls?
 
 ## 🎮 Play the Game
 
@@ -9,8 +9,6 @@ A nostalgic Tetris game themed around the 2020 toilet paper rush during the COVI
 ## 🎯 About
 
 Remember the great toilet paper shortage of 2020? This game pays homage to that chaotic time with a fun Tetris twist. Clear lines to collect toilet paper rolls and build your supply for the apocalypse!
-
-Can you beat the Australian family's record of 600 rolls?
 
 ## ✨ Features
 
