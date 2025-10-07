@@ -47,7 +47,7 @@ Remember the great toilet paper shortage of 2020? This game pays homage to that 
 - **Space** - Pause/Resume
 - **R** - Restart game
 - **Enter** - Hard drop
-- **Any key - Restart on game over screen
+- **Any key** - Restart on game over screen
 
 ## 🏆 Scoring
 
